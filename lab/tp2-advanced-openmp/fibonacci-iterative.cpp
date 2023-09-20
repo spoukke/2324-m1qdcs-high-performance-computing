@@ -1,5 +1,7 @@
 #include <cstdio>
 #include <cstdlib>
+#include <iostream>
+#include <chrono>
 #include "omp.h"
 
 void printUsage(int argc, char **argv)
@@ -11,32 +13,47 @@ void printUsage(int argc, char **argv)
 int main(int argc, char **argv)
 {
   // Check the validity of command line arguments and print usage if invalid
-  // Verifier la validite des arguments fournis a la ligne de commande et afficher l'utilisation si invalid
-  if (argc < 2) { 
+  if (argc < 2)
+  {
     printUsage(argc, argv);
     return 0;
   }
 
   // Read the index of the Fibonacci number to compute
-  // Lire l'indice du nombre Fibonacci a calculer
   const int N = atoi(argv[1]);
 
   // Allocate and initialize the array containing Fibonacci numbers
-  // Allouer et initialiser le tableau contenant les nombres de Fibonacci
-  int fib[1000];
+  int fib[N];
   fib[0] = 0;
   fib[1] = 1;
 
-  // Create threads before creating tasks. Only one thread will create tasks, other threads will execute them when they
-  // are idle. fib is an array pointer and N is a constant so we can share them among threads.
-  // Creer les threads avant de creer les taches. Seulement un thread s'occupera de la creation des taches, les autres
-  // threads executerons les taches tant qu'ils sont disponibles.
-  // TODO / A FAIRE ...
+  // Set the number of OpenMP threads (you can adjust this as needed)
+  omp_set_num_threads(32);
+
+  auto start = std::chrono::high_resolution_clock::now();
+  // Parallelize the computation using OpenMP tasks
+#pragma omp parallel
+  {
+    // Only one thread initializes the tasks
+#pragma omp single
+    for (int i = 2; i < N; i++)
+    {
+#pragma omp task depend(in: fib[i - 1], fib[i - 2]) depend(out: fib[i])
+      {
+        fib[i] = fib[i - 1] + fib[i - 2];
+      }
+    }
+  }
 
   // Print all computed Fibonacci numbers until n
-  // Afficher tous les nombres Fibonacci jusqu'a n
+  std::chrono::duration<double> temps = std::chrono::high_resolution_clock::now() - start;
   printf("Fibonacci numbers: ");
-  for (int i = 0; i < N; i++) { printf("%d ", fib[i]); }
+  for (int i = 0; i < N; i++)
+  {
+    printf("%d ", fib[i]);
+  }
   printf("\n");
+  std::cout << "Temps: " << temps.count() << "s\n";
+
   return 0;
 }

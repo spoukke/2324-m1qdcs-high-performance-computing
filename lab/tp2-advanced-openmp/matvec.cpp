@@ -29,36 +29,48 @@ int main(int argc, char **argv)
 
   // Calculer b = A * x NREPET fois en sequentiel
   auto start = std::chrono::high_resolution_clock::now();
+  // Inside the sequential loop
   for (int repet = 0; repet < NREPET; repet++) {
-    // A FAIRE ...
+      for (int i = 0; i < dim; i++) {
+          b[i] = 0.0;
+          for (int j = 0; j < dim; j++) {
+              b[i] += A[i * dim + j] * x[j];
+          }
+      }
   }
   std::chrono::duration<double> tempsSeq = std::chrono::high_resolution_clock::now() - start;
   std::cout << std::scientific << "Temps d'execution sequentiel: " << tempsSeq.count() / NREPET << "s" << std::endl;
 
   // Calculer b = A * x NREPET fois en parallele avec omp for
   start = std::chrono::high_resolution_clock::now();
+#pragma omp parallel for
   for (int repet = 0; repet < NREPET; repet++) {
-    // A FAIRE ...
+      for (int i = 0; i < dim; i++) {
+          b[i] = 0.0;
+          for (int j = 0; j < dim; j++) {
+              b[i] += A[i * dim + j] * x[j];
+          }
+      }
   }
   std::chrono::duration<double> tempsPar = std::chrono::high_resolution_clock::now() - start;
   std::cout << std::scientific << "Temps d'execution parallele avec omp for: " << tempsPar.count() / NREPET << "s" <<
-    std::endl;
+  std::endl;
 
   // Calculer b = A * x NREPET fois en parallele avec omp task
-  start = std::chrono::high_resolution_clock::now();
-  for (int repet = 0; repet < NREPET; repet++) {
-    // A FAIRE ...
-  }
-  std::chrono::duration<double> tempsParTasks = std::chrono::high_resolution_clock::now() - start;
-  std::cout << std::scientific << "Temps d'execution parallele avec omp tasks: " << tempsParTasks.count() / NREPET <<
-    "s" << std::endl;
+  // start = std::chrono::high_resolution_clock::now();
+  // for (int repet = 0; repet < NREPET; repet++) {
+  //   // A FAIRE ...
+  // }
+  // std::chrono::duration<double> tempsParTasks = std::chrono::high_resolution_clock::now() - start;
+  // std::cout << std::scientific << "Temps d'execution parallele avec omp tasks: " << tempsParTasks.count() / NREPET <<
+  //   "s" << std::endl;
 
   // Calculer et afficher l'acceleration et l'efficacite de la parallelisation avec omp for
-  double acceleration = 0.0;
-  double efficacite = 0.0;
-  // A FAIRE ...
+  double acceleration = tempsSeq.count() / tempsPar.count();
+  double efficiency = acceleration / omp_get_max_threads();
+
   std::cout << "Acceleration: " << acceleration << std::endl;
-  std::cout << "Efficacite: " << acceleration << std::endl;
+  std::cout << "Efficacite: " << efficiency << std::endl;
 
   // Verifier le resultat. b(i) est cense etre (dim - 1) * dim / 2 + i * dim
   for (int i = 0; i < dim; i++) {
@@ -72,5 +84,16 @@ int main(int argc, char **argv)
     }
   }
 
+  int threshold = 128;
+#pragma omp parallel for if(dim > threshold)
+  for (int repet = 0; repet < NREPET; repet++) {
+    for (int i = 0; i < dim; i++) {
+      b[i] = 0.0;
+      for (int j = 0; j < dim; j++) {
+          b[i] += A[i * dim + j] * x[j];
+      }
+    }
+  }
+  
   return 0;
 }
