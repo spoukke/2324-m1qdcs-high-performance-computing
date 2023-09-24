@@ -1,7 +1,8 @@
 #include <iostream>
+#include <chrono>
 #include "omp.h"
 
-#define N 16
+#define N 4096
 #define K 4
 #define NTASKS (N / K)
 
@@ -33,6 +34,7 @@ int main(int argc, char **argv)
       A[i][j] = i + j;
 
     // Compute array B in parallel
+  auto start = std::chrono::high_resolution_clock::now();
 #pragma omp parallel for collapse(2)
   for (int x = 0; x < N; x++) {
     for (int y = 0; y < N; y++) {
@@ -52,9 +54,11 @@ int main(int argc, char **argv)
       }
     }
   }
-
+  std::chrono::duration<double> temps = std::chrono::high_resolution_clock::now() - start;
   // Version 2: Using tasks, each task initializes a block of size K x K. There are (N / K) x (N / K) tasks in total
   // Version 2: Avec taches, chaque tache initialise un bloc de taille K x K. Il y a (N / K) x (N / K) taches au total
+
+  start = std::chrono::high_resolution_clock::now();
 #pragma omp parallel
   {
 #pragma omp for schedule(static) collapse(2)
@@ -80,6 +84,7 @@ int main(int argc, char **argv)
       }
     }
   }
+  std::chrono::duration<double> tempsTasks = std::chrono::high_resolution_clock::now() - start;
 
 #pragma omp parallel default(none) shared(A, B, deps)
 {
@@ -120,6 +125,9 @@ int main(int argc, char **argv)
     printf("Array A:\n");
     printArray(A);
   }
+
+  std::cout << "Temps 1: " << temps.count() << "s\n";
+  std::cout << "Temps 2: " << tempsTasks.count() << "s\n";
 
   // 
 #pragma omp parallel default(none) shared(A, B, deps)
