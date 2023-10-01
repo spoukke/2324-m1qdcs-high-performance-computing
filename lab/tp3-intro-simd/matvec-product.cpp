@@ -4,7 +4,7 @@
 
 void matrixVectorMultiply(float* A, float* x, float* y, int size) {
 #pragma omp parallel for if (dim >= 64)
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < size - 8; i++) {
         __m256 sum;
         for (int j = 0; j < size; j += 8) {
             __m256 a = _mm256_loadu_ps(&A[i * size + j]);
@@ -17,13 +17,13 @@ void matrixVectorMultiply(float* A, float* x, float* y, int size) {
 
 int main(int argc, char** argv) {
     if (argc != 2) {
-        std::cerr << "Usage: " << argv[0] << " <matrix_size>" << std::endl;
+        std::cout << "Usage: " << argv[0] << " <matrix_size>" << std::endl;
         return 1;
     }
 
     int size = std::atoi(argv[1]);
     if (size % 8 != 0) {
-        std::cerr << "Matrix size must be a multiple of 8." << std::endl;
+        std::cout << "Matrix size must be a multiple of 8." << std::endl;
         return 1;
     }
 
@@ -31,23 +31,16 @@ int main(int argc, char** argv) {
     float* x = new float[size];
     float* y = new float[size];
 
-    // Initialize matrix A and vector x (for example)
+    // Initialize matrix A and vector x
     for (int i = 0; i < size; i++) {
         for (int j = 0; j < size; j++) {
-            A[i * size + j] = i + j; // You can set your own values
+            A[i * size + j] = i + j;
         }
         x[i] = i;
     }
 
     // Perform matrix-vector multiplication
     matrixVectorMultiply(A, x, y, size);
-
-    // Print the result vector y
-    std::cout << "Result vector y:" << std::endl;
-    for (int i = 0; i < size; i++) {
-        std::cout << y[i] << " ";
-    }
-    std::cout << std::endl;
 
     delete[] A;
     delete[] x;
