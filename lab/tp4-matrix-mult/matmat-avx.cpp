@@ -129,15 +129,15 @@ int main(int argc, char **argv)
     for (int repeat = 0; repeat < NREPEAT; repeat++) {
       memset(&C[0], 0, N * N * sizeof(float));
       // TODO / A FAIRE ...
-      for (int i = 0; i < N; i += B2) {
-        for (int k = 0; k < N; k += B2) {
-          for (int j = 0; j < N; j += B2) {
+      for (int i = 0; i < N; i += B1) {
+        for (int k = 0; k < N; k += B1) {
+          for (int j = 0; j < N; j += B1) {
             float *tA = &A[i * N + k];
             float *tB = &B[k * N + j];
             float *tC = &C[i * N + j];
-            for (int i2 = 0; i2 < B2; i2++) {
-              for (int k2 = 0; k2 < B2; k2++) {
-                for (int j2 = 0; j2 < B2; j2++) {
+            for (int i2 = 0; i2 < B1; i2++) {
+              for (int k2 = 0; k2 < B1; k2++) {
+                for (int j2 = 0; j2 < B1; j2++) {
                   tC[i2 * N + j2] += tA[i2 * N + k2] * tB[k2 * N + j2];
                 }
               }
