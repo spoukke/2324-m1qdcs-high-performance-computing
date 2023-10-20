@@ -7,7 +7,7 @@
 #include <chrono>
 #include "omp.h"
 
-#define NREPET 1
+#define NREPET 1001
 
 void printUsage(int argc, char **argv)
 {
@@ -227,20 +227,29 @@ int main(int argc, char **argv)
     auto start = std::chrono::high_resolution_clock::now();
     int B1 = 128; // Tile size for each task / Taille de tuile pour chaque tache
     for (int repet = 0; repet < NREPET; repet++) {
-      for (int i = 0; i < N; i += B1) {
-        for (int j = i; j < N; j += B1) {
-          if (i == j) {
-            for (int i1 = i; i1 < i + B1; i1 += 8) {
-              for (int j1 = i1+8; j1 < j + B1; j1 += 8) {
-                transAVX8x8InPlace(&A[i1*N + j1], &A[j1*N + i1], tile, tile2, N);
-              }
-              transAVX8x8(&A[i1*N + i1], &A[i1*N + i1], tile, N);
-            }
-          } 
-          else {
-            for (int i1 = i; i1 < i + B1; i1 += 8) {
-              for (int j1 = j; j1 < j + B1; j1 += 8) {
-                transAVX8x8InPlace(&A[i1*N + j1], &A[j1*N + i1], tile, tile2, N);
+      #pragma omp parallel num_threads(16)
+      {
+        #pragma omp single
+        {
+          for (int i = 0; i < N; i += B1) {
+            for (int j = i; j < N; j += B1) {
+              #pragma omp taks firstprivate(i, j, tile, tile2)
+              {
+                if (i == j) {
+                  for (int i1 = i; i1 < i + B1; i1 += 8) {
+                    for (int j1 = i1+8; j1 < j + B1; j1 += 8) {
+                      transAVX8x8InPlace(&A[i1*N + j1], &A[j1*N + i1], tile, tile2, N);
+                    }
+                    transAVX8x8(&A[i1*N + i1], &A[i1*N + i1], tile, N);
+                  }
+                } 
+                else {
+                  for (int i1 = i; i1 < i + B1; i1 += 8) {
+                    for (int j1 = j; j1 < j + B1; j1 += 8) {
+                      transAVX8x8InPlace(&A[i1*N + j1], &A[j1*N + i1], tile, tile2, N);
+                    }
+                  }
+                }
               }
             }
           }
