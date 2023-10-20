@@ -7,7 +7,7 @@
 #include <chrono>
 #include "omp.h"
 
-#define NREPET 1001
+#define NREPET 1
 
 void printUsage(int argc, char **argv)
 {
@@ -222,19 +222,37 @@ int main(int argc, char **argv)
 
   // Transpose the matrix by 8x8 tiles using AVX transpose and in-place transpose and OpenMP tasks
   // Transposer la matrice en utilisant tuiles de taille 8x8 avec AVX et transposition in-place, avec OpenMP tasks
-  // {
-  //   memcpy(B, A, N * N * sizeof(float));
-  //   auto start = std::chrono::high_resolution_clock::now();
-  //   int B1 = 128; // Tile size for each task / Taille de tuile pour chaque tache
-  //   for (int repet = 0; repet < NREPET; repet++) {
-  //     // TODO
-  //   }
-  //   std::chrono::duration<double> time = std::chrono::high_resolution_clock::now() - start;
-  //   std::cout << "AVX in-place transpose with OpenMP tasks: " << time.count() << "s\n";
-  //   std::cout << "Performance: " << (long long) N * N * sizeof(float) / (1e9 * time.count() / NREPET) << "GB/s\n";
-  //   verify(A, N);
-  //   memcpy(A, B, N * N * sizeof(float));
-  // }
+  {
+    memcpy(B, A, N * N * sizeof(float));
+    auto start = std::chrono::high_resolution_clock::now();
+    int B1 = 128; // Tile size for each task / Taille de tuile pour chaque tache
+    for (int repet = 0; repet < NREPET; repet++) {
+      for (int i = 0; i < N; i += B1) {
+        for (int j = i; j < N; j += B1) {
+          if (i == j) {
+            for (int i1 = i; i1 < i + B1; i1 += 8) {
+              for (int j1 = i1+8; j1 < j + B1; j1 += 8) {
+                transAVX8x8InPlace(&A[i1*N + j1], &A[j1*N + i1], tile, tile2, N);
+              }
+              transAVX8x8(&A[i1*N + i1], &A[i1*N + i1], tile, N);
+            }
+          } 
+          else {
+            for (int i1 = i; i1 < i + B1; i1 += 8) {
+              for (int j1 = j; j1 < j + B1; j1 += 8) {
+                transAVX8x8InPlace(&A[i1*N + j1], &A[j1*N + i1], tile, tile2, N);
+              }
+            }
+          }
+        }
+      }
+    }
+    std::chrono::duration<double> time = std::chrono::high_resolution_clock::now() - start;
+    std::cout << "AVX in-place transpose with OpenMP tasks: " << time.count() << "s\n";
+    std::cout << "Performance: " << (long long) N * N * sizeof(float) / (1e9 * time.count() / NREPET) << "GB/s\n";
+    verify(A, N);
+    memcpy(A, B, N * N * sizeof(float));
+  }
 
 
   // Free matrices
