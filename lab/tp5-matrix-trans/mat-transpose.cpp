@@ -1,3 +1,28 @@
+// Here are my execution results for N=2048 and B1=128
+// Sequential transpose: 0.0219227s
+// Performance: 0.76529GB/s
+
+// AVX transpose: 0.00729108s
+// Performance: 2.30106GB/s
+
+// AVX in-place transpose: 0.00291692s
+// Performance: 5.7517GB/s
+
+// AVX in-place transpose with OpenMP tasks: 0.00324574s
+// Performance: 5.16899GB/s
+
+// For the last implementation, here are my results for different values of B1:
+// B1=64
+// AVX in-place transpose with OpenMP tasks: 0.00296729s
+// Performance: 5.65406GB/s
+// B1=256
+// AVX in-place transpose with OpenMP tasks: 0.00281081s
+// Performance: 5.96881GB/s
+// B1=512
+// AVX in-place transpose with OpenMP tasks: 0.00319899s
+// Performance: 5.24453GB/s
+// My best performance is for B1=256.
+
 #include <iostream>
 #include <iomanip>
 #include <vector>
@@ -148,8 +173,6 @@ int main(int argc, char **argv)
   int N = std::atoi(argv[1]);
   __m256 tile[8], tile2[8];
 
-
-  // Allocate and initialize the matrix A and B
   // Allouer et initialiser les matrices A et B
   float *A = (float *)_mm_malloc(N * N * sizeof(float), 32);
   float *B = (float *)_mm_malloc(N * N * sizeof(float), 32);
@@ -213,19 +236,20 @@ int main(int argc, char **argv)
       }
     }
     std::chrono::duration<double> time = std::chrono::high_resolution_clock::now() - start;
-    std::cout << "AVX in-place transpose: " << time.count() << "s\n";
+    std::cout << "AVX in-place transpose: " << time.count() / NREPET << "s\n";
     std::cout << "Performance: " << (long long) N * N * sizeof(float) / (1e9 * time.count() / NREPET) << "GB/s\n";
     verify(A, N);
     memcpy(A, B, N * N * sizeof(float));
   }
 
 
-  // Transpose the matrix by 8x8 tiles using AVX transpose and in-place transpose and OpenMP tasks
+  // Transpose the matrix by 8x8 tiles using AVX transpose andAVX in-place transpose with OpenMP tasks: 0.00281081s
+// Performance: 5.96881GB/s in-place transpose and OpenMP tasks
   // Transposer la matrice en utilisant tuiles de taille 8x8 avec AVX et transposition in-place, avec OpenMP tasks
   {
     memcpy(B, A, N * N * sizeof(float));
     auto start = std::chrono::high_resolution_clock::now();
-    int B1 = 128; // Tile size for each task / Taille de tuile pour chaque tache
+    int B1 = 64; // Tile size for each task / Taille de tuile pour chaque tache
     for (int repet = 0; repet < NREPET; repet++) {
       #pragma omp parallel num_threads(16)
       {
@@ -257,7 +281,7 @@ int main(int argc, char **argv)
       }
     }
     std::chrono::duration<double> time = std::chrono::high_resolution_clock::now() - start;
-    std::cout << "AVX in-place transpose with OpenMP tasks: " << time.count() << "s\n";
+    std::cout << "AVX in-place transpose with OpenMP tasks: " << time.count() / NREPET << "s\n";
     std::cout << "Performance: " << (long long) N * N * sizeof(float) / (1e9 * time.count() / NREPET) << "GB/s\n";
     verify(A, N);
     memcpy(A, B, N * N * sizeof(float));

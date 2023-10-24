@@ -1,3 +1,15 @@
+// |            | 1 thread  | 2 threads | 4 threads | 8 threads |
+// | ---------- | --------- | --------- | --------- | --------- |
+// | 1 stride   | 0.25788s  | 0.255618s | 0.272964s | 0.249507s |
+// | 2 strides  | 0.325684s | 0.261843s | 0.235435s | 0.242224s |
+// | 4 strides  | 0.264313s | 0.256894s | 0.238892s | 0.370166s |
+// | 8 strides  | 0.260409s | 0.243062s | 0.275562s | 0.244034s |
+// | 16 strides | 0.287775s | 0.333961s | 0.390888s | 0.257152s |
+// | 32 strides | 0.356716s | 0.480114s | 0.257916s | 0.249738s |
+// | 64 strides | 0.326678s | 0.268314s | 0.278913s | 0.255761s |
+//
+// I cannit dfferentiate any pattern in the time execution by threads or strides.
+
 #include <iostream>
 #include <vector>
 #include <chrono>
@@ -6,7 +18,7 @@
 
 #define NREPEAT 128
 #define NTHREADMAX 8
-#define STRIDE 1
+#define STRIDE 64
 
 int main()
 {
