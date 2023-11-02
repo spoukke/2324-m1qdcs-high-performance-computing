@@ -145,31 +145,73 @@ int main()
   // Vectors
   std::vector<double> x(N), b(N), b2(N);
 
+  // Initialize random number generator
+  // std::srand(std::time(nullptr));
+
   // Generate a lower-triangular N x N matrix L with random values between 0.0 and 1.0
 	// Optional: Use LAPACK random matrix generator dlatmr
   // Generer une matrice triangulaire inferieure L de taille N x N avec valeurs aleatoires entre 0.0 et 1.0
   // Optionnel: Utiliser la fonction generatrice de matrice aleatoire dlatmr dans LAPACK
   // TODO / A FAIRE
+  for (int i = 0; i < N; ++i) {
+    for (int j = 0; j <= i; ++j) {
+      L[i * N + j] = static_cast<double>(std::rand()) / RAND_MAX;
+    }
+  }
 
   // Generate a symmetric positive definite matrix A = L * L^T using the dgemm function (BLAS3)
   // Generer une matrice symmetrique positive definite A = L * L^T avec la fonction dgemm (BLAS3)
   // TODO / A FAIRE
+  char trans = 'N';
+  double alpha = 1.0;
+  double beta = 0.0;
+  dgemm_(&trans, &trans, &N, &N, &N, &alpha, L.data(), &N, L.data(), &N, &beta, A.data(), &N);
 
   // Perform a Cholesky factorization on the matrix A, A = L LˆT using the potrf function (LAPACK)
   // Effecture une factorisation Cholesky sur la matrice A, A = L L^T avec la fonction potrf (LAPACK)
   // TODO / A FAIRE
+  char uplo = 'L';
+  int info;
+  dpotrf_(&uplo, &N, A.data(), &N, &info);
+  if (info != 0) {
+    std::cerr << "dpotrf failed with info = " << info << std::endl;
+    return 1;
+  }
+
 
   // Solve the linear system A x = L L^T x = b by first solving L y = b, then solving LˆT x = y, with two successive
   // calls to dtrsv
   // Resoudre le systeme lineaire A x = L L^T x = b, d'abort en resolvant L y = b, ensuite LˆT x = y avec deux appels
   // successifs au dtrsv.
   // TODO / A FAIRE
+  // Solve L y = b
+  b2 = b; // Copy b to b2, which will store the intermediate result y
+  char diag = 'N';
+  int incx = 1;
+  dtrsv_(&uplo, &trans, &diag, &N, A.data(), &N, b2.data(), &incx);
+
+  // Solve L^T x = y
+  trans = 'T';
+  x = b2; // Copy y to x, which will be the final result
+  dtrsv_(&uplo, &trans, &diag, &N, A.data(), &N, x.data(), &incx);
 
   // Verify the solution x by computing b2 = A x using dgemv, then compare it to the initial right hand side vector by
   // computing (b - b2) using daxpy, and computing the norm of this vector~(which is the error) by dnrm2
   // Verifier la solution x en calculant b2 = A x avec dgemv, puis en le comparant au second membre initial en calculant
   // (b - b2) avec daxpy d'abord, en suite en calculant la norme de ce vecteur~(ce qui est l'erreur) avec dnrm2.
   // TODO / A FAIRE
+  // Verify the solution by computing b2 = A x
+  alpha = 1.0;
+  beta = 0.0;
+  dgemv_(&trans, &N, &N, &alpha, A.data(), &N, x.data(), &incx, &beta, b2.data(), &incx);
+
+  // Compute the error norm ||b - b2||
+  for (int i = 0; i < N; ++i) {
+    b2[i] = b[i] - b2[i];
+  }
+  double error = dnrm2_(&N, b2.data(), &incx);
+  std::cout << "Error norm: " << error << std::endl;
+
 
   // Now implement a blocked version of the potrf yourself using dpotf2, dtrsm, dsyrk, and dgemm routines, using block
   // size BS.
