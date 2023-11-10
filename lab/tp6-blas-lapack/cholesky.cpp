@@ -11,8 +11,19 @@
 // Liste complete des routines BLAS
 //   https://www.netlib.org/blas/blasqr.pdf
 
+#include <iomanip>
 #include <iostream>
 #include <vector>
+
+void printMatrix(const std::vector<double>& mat, int rows, int cols) {
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+          std::cout << std::setw(12) << mat[j * rows + i] << " ";
+        }
+        std::cout << std::endl;
+    }
+    std::cout << std::endl;
+}
 
 // 2-norm of a vector (BLAS1)
 // 2-norme pour un vecteur (BLAS1)
@@ -137,7 +148,7 @@ extern "C" void dpotf2_(
 int main()
 {
   // Dimension of matrices / Dimensions des matrices
-  int N = 128; 
+  int N = 32; 
   // Block size for the task-parallel blocked potrf code / Taille de bloc pour potrf parallele par bloc a base de taches
   int BS = 8;  
   // Matrices
@@ -146,38 +157,53 @@ int main()
   std::vector<double> x(N), b(N), b2(N);
 
   // Initialize random number generator
-  // std::srand(std::time(nullptr));
+  std::srand(std::time(nullptr));
 
   // Generate a lower-triangular N x N matrix L with random values between 0.0 and 1.0
 	// Optional: Use LAPACK random matrix generator dlatmr
   // Generer une matrice triangulaire inferieure L de taille N x N avec valeurs aleatoires entre 0.0 et 1.0
   // Optionnel: Utiliser la fonction generatrice de matrice aleatoire dlatmr dans LAPACK
   // TODO / A FAIRE
-  for (int i = 0; i < N; ++i) {
-    for (int j = 0; j <= i; ++j) {
-      L[i * N + j] = static_cast<double>(std::rand()) / RAND_MAX;
+  for (int j = 0; j < N; ++j) {
+    for (int i = 0; i < N; ++i) {
+      if (i >= j) {
+        L[j * N + i] = static_cast<double>(std::rand()) / RAND_MAX; // Column-major
+      }
     }
   }
+  for (int i = 0; i < N; ++i) {
+    b[i] = static_cast<double>(std::rand()) / RAND_MAX;
+  }
+  std::cout << "Matrix L:" << std::endl;
+  printMatrix(L, N, N);
+  std::cout << "Vector b:" << std::endl;
+  printMatrix(b, N, 1);
 
   // Generate a symmetric positive definite matrix A = L * L^T using the dgemm function (BLAS3)
   // Generer une matrice symmetrique positive definite A = L * L^T avec la fonction dgemm (BLAS3)
   // TODO / A FAIRE
   char trans = 'N';
+  char transT = 'T'; // Transpose for the second matrix
   double alpha = 1.0;
   double beta = 0.0;
-  dgemm_(&trans, &trans, &N, &N, &N, &alpha, L.data(), &N, L.data(), &N, &beta, A.data(), &N);
+  dgemm_(&trans, &transT, &N, &N, &N, &alpha, &L[0], &N, &L[0], &N, &beta, &A[0], &N);
+  std::cout << "Matrix A (after L * L^T):" << std::endl;
+  printMatrix(A, N, N);
 
   // Perform a Cholesky factorization on the matrix A, A = L LˆT using the potrf function (LAPACK)
   // Effecture une factorisation Cholesky sur la matrice A, A = L L^T avec la fonction potrf (LAPACK)
   // TODO / A FAIRE
   char uplo = 'L';
   int info;
-  dpotrf_(&uplo, &N, A.data(), &N, &info);
+  // we copy A before doing the cholesky factorization so we can use B for the verification step
+  B = A;
+  dpotrf_(&uplo, &N, &A[0], &N, &info);
   if (info != 0) {
     std::cerr << "dpotrf failed with info = " << info << std::endl;
     return 1;
   }
-
+  std::cout << "Matrix A (after Cholesky factorization):" << std::endl;
+  printMatrix(A, N, N);
 
   // Solve the linear system A x = L L^T x = b by first solving L y = b, then solving LˆT x = y, with two successive
   // calls to dtrsv
@@ -185,15 +211,19 @@ int main()
   // successifs au dtrsv.
   // TODO / A FAIRE
   // Solve L y = b
-  b2 = b; // Copy b to b2, which will store the intermediate result y
+  std::copy(b.begin(), b.end(), b2.begin());
   char diag = 'N';
   int incx = 1;
-  dtrsv_(&uplo, &trans, &diag, &N, A.data(), &N, b2.data(), &incx);
+  dtrsv_(&uplo, &trans, &diag, &N, &A[0], &N, &b2[0], &incx);
+  std::cout << "Solution vector of L y = b:" << std::endl;
+  printMatrix(b2, N, 1);
 
   // Solve L^T x = y
-  trans = 'T';
-  x = b2; // Copy y to x, which will be the final result
-  dtrsv_(&uplo, &trans, &diag, &N, A.data(), &N, x.data(), &incx);
+  dtrsv_(&uplo, &transT, &diag, &N, &A[0], &N, &b2[0], &incx);
+  // std::cout << "Solution vector of L^T x = y:" << std::endl;
+  // printMatrix(b2, N, 1);
+
+  std::copy(b2.begin(), b2.end(), x.begin());
 
   // Verify the solution x by computing b2 = A x using dgemv, then compare it to the initial right hand side vector by
   // computing (b - b2) using daxpy, and computing the norm of this vector~(which is the error) by dnrm2
@@ -203,15 +233,17 @@ int main()
   // Verify the solution by computing b2 = A x
   alpha = 1.0;
   beta = 0.0;
-  dgemv_(&trans, &N, &N, &alpha, A.data(), &N, x.data(), &incx, &beta, b2.data(), &incx);
+  dgemv_(&trans, &N, &N, &alpha, &B[0], &N, &x[0], &incx, &beta, &b2[0], &incx);
+  std::cout << "Vector b2 (after verification):" << std::endl;
+  printMatrix(b2, N, 1);
 
-  // Compute the error norm ||b - b2||
-  for (int i = 0; i < N; ++i) {
-    b2[i] = b[i] - b2[i];
-  }
-  double error = dnrm2_(&N, b2.data(), &incx);
+  alpha = -1.0;
+  daxpy_(&N, &alpha, &b2[0], &incx, &b[0], &incx);
+  std::cout << "Vector b2 - b:" << std::endl;
+  printMatrix(b2, N, 1);
+
+  double error = dnrm2_(&N, &b2[0], &incx);
   std::cout << "Error norm: " << error << std::endl;
-
 
   // Now implement a blocked version of the potrf yourself using dpotf2, dtrsm, dsyrk, and dgemm routines, using block
   // size BS.
@@ -222,6 +254,46 @@ int main()
   // Utiliser OpenMP Tasks afin de paralleliser le calcul, en precisant les dependences entre les operations.
   // Employer la clause priority dans la generation des taches afin de prioriser les taches sur le chemin critique.
   // TODO / A FAIRE
+  // #pragma omp parallel
+  // {
+  //   #pragma omp single
+  //   {
+  //     for (int k = 0; k < N; k += BS) {
+  //       int blockSize = std::min(BS, N - k);
+
+  //       // Task 1: Factorize the diagonal block
+  //       #pragma omp task depend(inout:A[k*N+k]) priority(1)
+  //       dpotf2_(&uplo, &blockSize, &A[k * N + k], &N, &info);
+
+  //       for (int i = k + BS; i < N; i += BS) {
+  //         int height = std::min(BS, N - i);
+
+  //         // Task 2: Solve L21 = A21 * L11'
+  //         #pragma omp task depend(in:A[k*N+k]) depend(inout:A[i*N+k]) priority(2)
+  //         dtrsm_("Right", "Lower", "Transpose", "Non-unit", &height, &blockSize, &alpha, &A[k * N + k], &N, &A[i * N + k], &N);
+
+  //         for (int j = k + BS; j <= i; j += BS) {
+  //           int width = std::min(BS, N - j);
+
+  //           // Task 3: Update A22 = A22 - L21 * L21'
+  //           #pragma omp task depend(in:A[i*N+k]) depend(in:A[j*N+k]) depend(inout:A[i*N+j]) priority(3)
+  //           dgemm_(&trans, &transT, &height, &width, &blockSize, &alpha, &A[i * N + k], &N, &A[j * N + k], &N, &beta, &A[i * N + j], &N);
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
+
+  // dgemv_(&trans, &N, &N, &alpha, &B[0], &N, &x[0], &1, &beta, &b2[0], &incx);
+
+  // // Compare b2 with the original b
+  // double error_norm = 0.0;
+  // for (int i = 0; i < N; ++i) {
+  //     b2[i] -= b[i];
+  //     error_norm += b2[i] * b2[i];
+  // }
+
+  // std::cout << "Error norm: " << error_norm << std::endl;
 
   return 0;
 }
