@@ -238,7 +238,7 @@ int main()
   printMatrix(b2, N, 1);
 
   alpha = -1.0;
-  daxpy_(&N, &alpha, &b2[0], &incx, &b[0], &incx);
+  daxpy_(&N, &alpha, &b[0], &incx, &b2[0], &incx);
   std::cout << "Vector b2 - b:" << std::endl;
   printMatrix(b2, N, 1);
 
