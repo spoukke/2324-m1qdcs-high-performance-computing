@@ -148,7 +148,7 @@ extern "C" void dpotf2_(
 int main()
 {
   // Dimension of matrices / Dimensions des matrices
-  int N = 32; 
+  int N = 16; 
   // Block size for the task-parallel blocked potrf code / Taille de bloc pour potrf parallele par bloc a base de taches
   int BS = 8;  
   // Matrices
@@ -243,7 +243,7 @@ int main()
   printMatrix(b2, N, 1);
 
   double error = dnrm2_(&N, &b2[0], &incx);
-  std::cout << "Error norm: " << error << std::endl;
+  std::cout << "Error norm: " << error << "\n" << std::endl;
 
   // Now implement a blocked version of the potrf yourself using dpotf2, dtrsm, dsyrk, and dgemm routines, using block
   // size BS.
@@ -254,46 +254,55 @@ int main()
   // Utiliser OpenMP Tasks afin de paralleliser le calcul, en precisant les dependences entre les operations.
   // Employer la clause priority dans la generation des taches afin de prioriser les taches sur le chemin critique.
   // TODO / A FAIRE
-  // #pragma omp parallel
-  // {
-  //   #pragma omp single
-  //   {
-  //     for (int k = 0; k < N; k += BS) {
-  //       int blockSize = std::min(BS, N - k);
+  A = B; // we copy back B = L*L^T into A
+  #pragma omp parallel num_threads(16) default(none) shared(A, N, BS)
+  {
+    char side = 'R';
+    char transN = 'N';
+    char transT = 'T';
+    char uplo = 'L';
+    char diag = 'N';
+    int info;
 
-  //       // Task 1: Factorize the diagonal block
-  //       #pragma omp task depend(inout:A[k*N+k]) priority(1)
-  //       dpotf2_(&uplo, &blockSize, &A[k * N + k], &N, &info);
+    #pragma omp single
+    {
+      for (int i = 0; i < N; i += BS) {
+        double* Ai = &A[i * N + i]; // Pointer to the diagonal block
 
-  //       for (int i = k + BS; i < N; i += BS) {
-  //         int height = std::min(BS, N - i);
+        #pragma omp task priority(1) depend(in: Ai[0]) depend(out: Ai[0])
+        dpotf2_(&uplo, &BS, &A[i * N + i], &N, &info);
 
-  //         // Task 2: Solve L21 = A21 * L11'
-  //         #pragma omp task depend(in:A[k*N+k]) depend(inout:A[i*N+k]) priority(2)
-  //         dtrsm_("Right", "Lower", "Transpose", "Non-unit", &height, &blockSize, &alpha, &A[k * N + k], &N, &A[i * N + k], &N);
+        for (int j = i + BS; j < N; j += BS) {
+          double* Aij = &A[i * N + j];
+          #pragma omp task priority(2) depend(in: Ai[0]) depend(in: Aij[0]) depend(out: Aij[0])
+          {
+            double alpha = 1.0;
+            dtrsm_(&side, &uplo, &transT, &diag, &BS, &BS, &alpha, &A[i * N + i], &N, &A[i * N + j], &N);
+          }
+        }
 
-  //         for (int j = k + BS; j <= i; j += BS) {
-  //           int width = std::min(BS, N - j);
+        for (int v = i + BS; v < N; v += BS) {
+          double* Aiv = &A[i * N + v]; // Pointer to the off-diagonal block
+          double* Avv = &A[v * N + v]; // Pointer to the diagonal block
 
-  //           // Task 3: Update A22 = A22 - L21 * L21'
-  //           #pragma omp task depend(in:A[i*N+k]) depend(in:A[j*N+k]) depend(inout:A[i*N+j]) priority(3)
-  //           dgemm_(&trans, &transT, &height, &width, &blockSize, &alpha, &A[i * N + k], &N, &A[j * N + k], &N, &beta, &A[i * N + j], &N);
-  //         }
-  //       }
-  //     }
-  //   }
-  // }
+          #pragma omp task priority(3) depend(in: Aiv[0]) depend(in: Avv[0]) depend(out: Avv[0])
+          {
+            double alpha = -1.0;
+            double beta = 1.0;
+            dsyrk_(&uplo, &transN, &BS, &BS, &alpha, &A[i * N + v], &N, &beta, &A[v * N + v], &N);
 
-  // dgemv_(&trans, &N, &N, &alpha, &B[0], &N, &x[0], &1, &beta, &b2[0], &incx);
-
-  // // Compare b2 with the original b
-  // double error_norm = 0.0;
-  // for (int i = 0; i < N; ++i) {
-  //     b2[i] -= b[i];
-  //     error_norm += b2[i] * b2[i];
-  // }
-
-  // std::cout << "Error norm: " << error_norm << std::endl;
+            for (int j = v + BS; j < N; j += BS) {
+              double alpha = -1.0;
+              double beta = 1.0;
+              dgemm_(&transN, &transT, &BS, &BS, &BS, &alpha, &A[i * N + j], &N, &A[i * N + v], &N, &beta, &A[v * N + j], &N);
+            }
+          }
+        }
+      }
+    }
+  }
+  std::cout << "Matrix A (after parallelized Cholesky factorization):" << std::endl;
+  printMatrix(A, N, N);
 
   return 0;
 }
